@@ -33,6 +33,12 @@ This Streamlit application allows organisations to assess, compare, and visualis
 ```bash
 pip install streamlit pandas matplotlib fpdf Pillow
 ````
+or
+
+```bash
+pip install -r requirements.txt
+````
+
 
 ### 2. Run the App
 
