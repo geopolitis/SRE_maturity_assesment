@@ -1,60 +1,90 @@
+# pages/4_PDF_Report.py
 import streamlit as st
 import matplotlib.pyplot as plt
+
 from sre_core.init_app import init_app
 from sre_core import scoring, plotting, pdf_report
 from sre_core.constants import LEVELS
 
+# Init (no extra sidebar controls)
 init_app(show_sidebar_controls=False)
 
 st.title("SRE Maturity PDF Report")
 
-if st.session_state.cap_df is None:
+# ---- Guardrails ----
+if not getattr(st.session_state, "maturity_items", None):
     st.info("No capabilities loaded. Go to the Assessment page to upload a CSV.")
-else:
-    df = scoring.build_df(st.session_state.maturity_items, st.session_state.responses_all)
-    if df.empty:
-        st.info("No responses yet.")
-    else:
-        # Build figures like Visual Report
-        radar_stage = df.groupby(["Product", "Stage"])["Score"].mean().reset_index()
-        labels_stage = sorted(radar_stage["Stage"].unique().tolist())
-        fig1, ax1 = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-        for prod in radar_stage["Product"].unique():
-            vals = (
-                radar_stage[radar_stage["Product"] == prod]
-                .set_index("Stage")
-                .reindex(labels_stage)["Score"]
-                .fillna(0)
-                .tolist()
-            )
-            plotting.plot_radar(ax1, labels_stage, vals, label=prod, y_max=len(LEVELS))
-        ax1.set_title("Maturity by Stage"); ax1.legend(loc="upper right")
+    st.stop()
 
-        radar_cap = df.groupby(["Product", "Capability"])["Score"].mean().reset_index()
-        labels_cap = sorted(radar_cap["Capability"].unique().tolist())
-        fig2, ax2 = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-        for prod in radar_cap["Product"].unique():
-            vals = (
-                radar_cap[radar_cap["Product"] == prod]
-                .set_index("Capability")
-                .reindex(labels_cap)["Score"]
-                .fillna(0)
-                .tolist()
-            )
-            plotting.plot_radar(ax2, labels_cap, vals, label=prod, y_max=len(LEVELS))
-        ax2.set_title("Maturity by Capability"); ax2.legend(loc="upper right")
+if not getattr(st.session_state, "responses_all", None):
+    st.info("No responses yet. Fill in the Assessment first.")
+    st.stop()
 
+product = st.session_state.get("selected_product")
+if not product:
+    st.info("Select a product in the Assessment page.")
+    st.stop()
+
+# ---- Build DF and filter for the selected product ----
+df = scoring.build_df(st.session_state.maturity_items, st.session_state.responses_all)
+if df.empty:
+    st.info("No responses yet.")
+    st.stop()
+
+pdf_df = df[df["Product"] == product]
+if pdf_df.empty:
+    st.info(f"No responses found for product '{product}'.")
+    st.stop()
+
+# ---- Radar 1: by Stage ----
+stages = sorted(pdf_df["Stage"].unique().tolist())
+stage_vals = [
+    float(pdf_df[pdf_df["Stage"] == s]["Score"].mean()) if not pdf_df[pdf_df["Stage"] == s].empty else 0.0
+    for s in stages
+]
+fig1, ax1 = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+plotting.plot_radar(ax1, stages if stages else ["N/A"], stage_vals if stage_vals else [0.0],
+                    label="Stage", y_max=len(LEVELS))
+ax1.set_title("Average score by Stage")
+if stages:
+    ax1.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
+st.pyplot(fig1, use_container_width=True)
+
+# ---- Radar 2: by Capability ----
+caps = sorted(pdf_df["Capability"].unique().tolist())
+cap_vals = [
+    float(pdf_df[pdf_df["Capability"] == c]["Score"].mean()) if not pdf_df[pdf_df["Capability"] == c].empty else 0.0
+    for c in caps
+]
+fig2, ax2 = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+plotting.plot_radar(ax2, caps if caps else ["N/A"], cap_vals if cap_vals else [0.0],
+                    label="Capability", y_max=len(LEVELS))
+ax2.set_title("Average score by Capability")
+if caps:
+    ax2.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
+st.pyplot(fig2, use_container_width=True)
+
+# ---- Sidebar bottom: spinner + PDF generation + download button ----
+with st.sidebar.container():
+    with st.spinner("Building PDF report…"):
         tmp_pdf = pdf_report.generate_pdf(
-            product=st.session_state.selected_product,
+            product=product,
             maturity_items=st.session_state.maturity_items,
-            responses=st.session_state.responses_all.get(st.session_state.selected_product, {}),
+            responses=st.session_state.responses_all.get(product, {}),
             fig_stage=fig1,
             fig_cap=fig2,
         )
+    # read bytes and show button
+    with open(tmp_pdf.name, "rb") as f:
+        pdf_bytes = f.read()
+    st.download_button(
+        label="Download PDF Report",
+        data=pdf_bytes,
+        file_name=f"{product}_maturity_report.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
 
-        st.sidebar.download_button(
-            "Download PDF Report",
-            data=open(tmp_pdf.name, "rb").read(),
-            file_name=f"{st.session_state.selected_product}_maturity_report.pdf",
-            mime="application/pdf",
-        )
+# Clean up figures
+plt.close(fig1)
+plt.close(fig2)
