@@ -4,7 +4,7 @@ dist/
 *.egg-info/
 .eggs/
 .vscode/
-
+.coverage
 .pytest_cache/
 
 __pycache__/
