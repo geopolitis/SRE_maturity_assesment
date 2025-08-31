@@ -81,7 +81,7 @@ def generate_pdf(
     pdf.cell(0, 10, txt=_safe(f"SRE Maturity Report for: {product}"), ln=True, align="C")
     pdf.set_font("Arial", size=10)
     pdf.cell(0, 8, txt=_safe(f"Generated: {datetime.now():%Y-%m-%d %H:%M}"), ln=True, align="C")
-    pdf.ln(3)
+    pdf.ln(8)
 
     # Build tri-state status for ring
     status_map = build_status_map(maturity_items, responses, LEVELS)
@@ -112,7 +112,7 @@ def generate_pdf(
     gap = 5
     half_w = (usable_w - gap) / 2.0
     top_h = half_w  # assume square radars; height ~ width
-    bottom_y = margin + top_h + 6  # start of bottom area
+    bottom_y = margin + top_h + 12  # start of bottom area, extra gap
 
     # stage radar (left)
     pdf.image("radar_stage.png", x=margin, y=margin, w=half_w)

@@ -41,8 +41,16 @@ stage_vals = [
 fig1, ax1 = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
 plotting.plot_radar(ax1, stages if stages else ["N/A"], stage_vals if stage_vals else [0.0], label="Stage")
 ax1.set_title("Average score by Stage")
+# Legend placement and tick label sizing for readability
 if stages:
-    ax1.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
+    handles, labels = ax1.get_legend_handles_labels()
+    if len(handles) > 1:
+        ax1.legend(loc="upper center", bbox_to_anchor=(0.5, 1.12), ncol=2, fontsize=8, frameon=False)
+    elif ax1.legend_:
+        ax1.legend_.remove()
+stage_fs = 9 if len(stages) <= 10 else 8 if len(stages) <= 16 else 7
+ax1.tick_params(axis='x', labelsize=stage_fs, pad=6)
+fig1.tight_layout(pad=1.0, rect=[0.02, 0.02, 0.98, 0.88])
 def _render_fig(fig):
     try:
         st.pyplot(fig, width='stretch')
@@ -61,7 +69,15 @@ fig2, ax2 = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
 plotting.plot_radar(ax2, caps if caps else ["N/A"], cap_vals if cap_vals else [0.0], label="Capability")
 ax2.set_title("Average score by Capability")
 if caps:
-    ax2.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
+    handles, labels = ax2.get_legend_handles_labels()
+    if len(handles) > 1:
+        ax2.legend(loc="upper center", bbox_to_anchor=(0.5, 1.12), ncol=2, fontsize=8, frameon=False)
+    elif ax2.legend_:
+        ax2.legend_.remove()
+cap_count = max(1, len(caps))
+cap_fs = 9 if cap_count <= 12 else 8 if cap_count <= 24 else 7 if cap_count <= 36 else 6 if cap_count <= 60 else 5
+ax2.tick_params(axis='x', labelsize=cap_fs, pad=6)
+fig2.tight_layout(pad=1.0, rect=[0.02, 0.02, 0.98, 0.88])
 _render_fig(fig2)
 
 # Build + download (spinner in the sidebar bottom)
