@@ -2,7 +2,6 @@ import os
 import sys
 import io
 import numpy as np
-
 # Ensure project root is on path for importing sre_core
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
@@ -17,7 +16,6 @@ from sre_core.gauges import grid_from_completion, ring_maturity_by_stage, build_
 from sre_core.plotting import figure_to_image
 from sre_core import scoring, pdf_report
 
-
 def sample_data():
     maturity_items = [
         {"Stage": "Build", "Capability": "CI", LEVELS[0]: "", LEVELS[1]: "", LEVELS[2]: "", LEVELS[3]: "", LEVELS[4]: ""},
@@ -31,7 +29,6 @@ def sample_data():
     }
     return maturity_items, responses_all
 
-
 def test_scoring_build_df():
     items, responses_all = sample_data()
     df = scoring.build_df(items, responses_all)
@@ -40,7 +37,6 @@ def test_scoring_build_df():
     # score = sum sub-level scores across LEVELS; only specified levels contribute
     row_ci = df[df["Capability"] == "CI"].iloc[0]
     assert row_ci["Score"] >= 1.0  # Completed (1.0) + Partially (0.5)
-
 
 def test_grid_from_completion():
     completion = {"Build": 0.6, "Deploy": 0.2}
@@ -57,7 +53,6 @@ def test_grid_from_completion():
     # fill should end at 180 and start earlier based on pct (0.6 => span 108)
     assert round(fill.theta2) == 180
     assert round(fill.theta1) == 72  # 180-108
-
 
 def test_ring_maturity_by_stage():
     stages = ["Build", "Deploy"]
@@ -108,7 +103,6 @@ def test_build_status_map_and_pdf_long_token(tmp_path):
         fig_cap=fig2,
     )
     assert os.path.getsize(tmp.name) > 0
-
 
 def test_figure_to_image_and_pdf(tmp_path):
     # simple fig
