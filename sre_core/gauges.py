@@ -163,6 +163,9 @@ def ring_maturity_by_stage(
     gap: float = math.radians(6),      # gap between sectors
     colors: Tuple[str, str] = ("#2094f3", "#eaeaea"),
     title: Optional[str] = "Identification of the degree of the implementation\n(Maturity by Stage)",
+    # Layout tuning (adds top padding so stage labels don't collide with title)
+    title_y: float = 0.98,
+    layout_rect_top: float = 0.86,
 ):
     """
     Sunburst-like ring: each stage is a sector; each level a concentric band.
@@ -249,6 +252,8 @@ def ring_maturity_by_stage(
         )
 
     if title:
-        fig.suptitle(title, fontsize=18, y=0.96)
-    fig.tight_layout(rect=[0, 0.00, 1, 0.94])
+        # push title higher
+        fig.suptitle(title, fontsize=18, y=title_y)
+    # shrink axes height from the top to leave breathing room for title
+    fig.tight_layout(rect=[0, 0.00, 1, layout_rect_top])
     return fig
