@@ -1,6 +1,7 @@
 # pages/4_PDF_Report.py
 import streamlit as st
 import matplotlib.pyplot as plt
+import numpy as np
 
 from sre_core.init_app import init_app
 from sre_core import scoring, plotting, pdf_report
@@ -38,9 +39,23 @@ stage_vals = [
     float(pdf_df[pdf_df["Stage"] == s]["Score"].mean()) if not pdf_df[pdf_df["Stage"] == s].empty else 0.0
     for s in stages
 ]
-fig1, ax1 = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+title_fs_stage = 10
+title_pad_stage = 16
+title_fs_cap = 12
+title_pad_cap = 28
+
+# Determine a shared size for both radars (symmetry)
+cap_count = max(1, len(pdf_df["Capability"].unique().tolist()))
+shared_size = (
+    7.5 if cap_count <= 24 else
+    9.5 if cap_count <= 48 else
+    12.5 if cap_count <= 80 else
+    14.0
+)
+
+fig1, ax1 = plt.subplots(figsize=(shared_size, shared_size), subplot_kw=dict(polar=True))
 plotting.plot_radar(ax1, stages if stages else ["N/A"], stage_vals if stage_vals else [0.0], label="Stage")
-ax1.set_title("Average score by Stage")
+ax1.set_title("Average score by Stage", pad=title_pad_stage, fontsize=title_fs_stage)
 # Legend placement and tick label sizing for readability
 if stages:
     handles, labels = ax1.get_legend_handles_labels()
@@ -50,7 +65,26 @@ if stages:
         ax1.legend_.remove()
 stage_fs = 9 if len(stages) <= 10 else 8 if len(stages) <= 16 else 7
 ax1.tick_params(axis='x', labelsize=stage_fs, pad=6)
-fig1.tight_layout(pad=1.0, rect=[0.02, 0.02, 0.98, 0.88])
+
+# Align label rotation to their axis angle (upright)
+def _align_polar_labels(ax):
+    ticks = ax.get_xticks()
+    labels = ax.get_xticklabels()
+    for ang, lab in zip(ticks, labels):
+        deg = (np.degrees(ang) % 360)
+        rot = deg
+        ha = 'left'
+        if 90 < deg < 270:
+            rot = deg + 180
+            ha = 'right'
+        lab.set_rotation(rot)
+        lab.set_rotation_mode('anchor')
+        lab.set_ha(ha)
+        lab.set_va('center')
+
+_align_polar_labels(ax1)
+# Reserve extra top space for the title/legend
+fig1.tight_layout(pad=1.0, rect=[0.02, 0.02, 0.98, 0.92])
 def _render_fig(fig):
     try:
         st.pyplot(fig, width='stretch')
@@ -65,19 +99,21 @@ cap_vals = [
     float(pdf_df[pdf_df["Capability"] == c]["Score"].mean()) if not pdf_df[pdf_df["Capability"] == c].empty else 0.0
     for c in caps
 ]
-fig2, ax2 = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+cap_count = max(1, len(caps))
+fig2, ax2 = plt.subplots(figsize=(shared_size, shared_size), subplot_kw=dict(polar=True))
 plotting.plot_radar(ax2, caps if caps else ["N/A"], cap_vals if cap_vals else [0.0], label="Capability")
-ax2.set_title("Average score by Capability")
+ax2.set_title("Average score by Capability", pad=title_pad_cap, fontsize=title_fs_cap)
 if caps:
     handles, labels = ax2.get_legend_handles_labels()
     if len(handles) > 1:
         ax2.legend(loc="upper center", bbox_to_anchor=(0.5, 1.12), ncol=2, fontsize=8, frameon=False)
     elif ax2.legend_:
         ax2.legend_.remove()
-cap_count = max(1, len(caps))
 cap_fs = 9 if cap_count <= 12 else 8 if cap_count <= 24 else 7 if cap_count <= 36 else 6 if cap_count <= 60 else 5
 ax2.tick_params(axis='x', labelsize=cap_fs, pad=6)
-fig2.tight_layout(pad=1.0, rect=[0.02, 0.02, 0.98, 0.88])
+
+_align_polar_labels(ax2)
+fig2.tight_layout(pad=1.0, rect=[0.02, 0.02, 0.98, 0.82])
 _render_fig(fig2)
 
 # Build + download (spinner in the sidebar bottom)

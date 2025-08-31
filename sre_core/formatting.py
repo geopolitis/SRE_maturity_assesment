@@ -34,7 +34,7 @@ def markdown_report(product: str, maturity_items, responses: dict) -> str:
             for cap, triples in cap_lines:
                 out.append(md_line(f"**{cap}:**"))
                 for lvl, st, ds in triples:
-                    out.append(md_line(f"&nbsp;&nbsp;&nbsp;&nbsp;{lvl} — {st}: {ds};"))
+                    out.append(md_line(f"&nbsp;&nbsp;&nbsp;&nbsp;{lvl} — {st}: {ds}"))
                 out.append("")
     if not any_completed:
         out.append(md_line("_Nothing completed yet._"))
@@ -54,7 +54,7 @@ def markdown_report(product: str, maturity_items, responses: dict) -> str:
             for cap, triples in cap_lines:
                 out.append(md_line(f"**{cap}:**"))
                 for lvl, st, ds in triples:
-                    out.append(md_line(f"&nbsp;&nbsp;&nbsp;&nbsp;{lvl} — {st}: {ds};"))
+                    out.append(md_line(f"&nbsp;&nbsp;&nbsp;&nbsp;{lvl} — {st}: {ds}"))
                 out.append("")
     if not any_needs:
         out.append(md_line("_Everything is completed! 🎯_"))

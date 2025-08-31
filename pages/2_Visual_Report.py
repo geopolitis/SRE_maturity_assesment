@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 import matplotlib.pyplot as plt
+import numpy as np
 
 from sre_core.init_app import init_app
 from sre_core import scoring, plotting
@@ -29,12 +30,25 @@ if df.empty:
     st.info("No responses yet.")
     st.stop()
 
-# ---------- Radar size control ----------
-radar_size = st.sidebar.slider("Radar size (inches)", min_value=4, max_value=12, value=6)
+# ---------- Radar sizing (match PDF style) ----------
+# We'll compute a shared adaptive size based on capability count (same as PDF)
+# but let users increase it via an optional slider cap.
+slider_size = st.sidebar.slider("Max radar size (inches)", min_value=6, max_value=14, value=10)
 
 # ---------- Radar by Stage ----------
 radar_stage = df.groupby(["Product", "Stage"])["Score"].mean().reset_index()
 labels_stage = sorted(radar_stage["Stage"].unique().tolist())
+
+# Determine shared size using capability count (like PDF)
+labels_cap_for_size = df["Capability"].unique().tolist()
+cap_count = max(1, len(labels_cap_for_size))
+shared_size = (
+    7.5 if cap_count <= 24 else
+    9.5 if cap_count <= 48 else
+    12.5 if cap_count <= 80 else
+    14.0
+)
+radar_size = min(max(shared_size, 6.0), float(slider_size))
 
 fig1, ax1 = plt.subplots(figsize=(radar_size, radar_size), subplot_kw=dict(polar=True))
 for prod in radar_stage["Product"].unique():
@@ -46,8 +60,34 @@ for prod in radar_stage["Product"].unique():
         .tolist()
     )
     plotting.plot_radar(ax1, labels_stage, vals, label=prod, y_max=len(LEVELS))
-ax1.set_title("Maturity by Stage")
-ax1.legend(bbox_to_anchor=(1.25, 1.1), loc="upper left", fontsize=9)
+ax1.set_title("Average score by Stage", pad=26, fontsize=12)
+# Legend centered above, hide when only one series
+handles, labels = ax1.get_legend_handles_labels()
+if len(handles) > 1:
+    ax1.legend(loc="upper center", bbox_to_anchor=(0.5, 1.12), ncol=2, fontsize=8, frameon=False)
+elif ax1.legend_:
+    ax1.legend_.remove()
+
+# Axis-aligned labels (match PDF)
+def _align_polar_labels(ax):
+    ticks = ax.get_xticks()
+    labels = ax.get_xticklabels()
+    for ang, lab in zip(ticks, labels):
+        deg = (np.degrees(ang) % 360)
+        rot = deg
+        ha = 'left'
+        if 90 < deg < 270:
+            rot = deg + 180
+            ha = 'right'
+        lab.set_rotation(rot)
+        lab.set_rotation_mode('anchor')
+        lab.set_ha(ha)
+        lab.set_va('center')
+
+stage_fs = 9 if len(labels_stage) <= 10 else 8 if len(labels_stage) <= 16 else 7
+ax1.tick_params(axis='x', labelsize=stage_fs, pad=6)
+_align_polar_labels(ax1)
+fig1.tight_layout(pad=1.0, rect=[0.02, 0.02, 0.98, 0.84])
 
 def _render_fig(fig):
     try:
@@ -72,8 +112,18 @@ for prod in radar_cap["Product"].unique():
         .tolist()
     )
     plotting.plot_radar(ax2, labels_cap, vals, label=prod, y_max=len(LEVELS))
-ax2.set_title("Maturity by Capability")
-ax2.legend(bbox_to_anchor=(1.25, 1.1), loc="upper left", fontsize=9)
+ax2.set_title("Average score by Capability", pad=26, fontsize=12)
+handles2, labels2 = ax2.get_legend_handles_labels()
+if len(handles2) > 1:
+    ax2.legend(loc="upper center", bbox_to_anchor=(0.5, 1.12), ncol=2, fontsize=8, frameon=False)
+elif ax2.legend_:
+    ax2.legend_.remove()
+
+cap_count2 = max(1, len(labels_cap))
+cap_fs = 9 if cap_count2 <= 12 else 8 if cap_count2 <= 24 else 7 if cap_count2 <= 36 else 6 if cap_count2 <= 60 else 5
+ax2.tick_params(axis='x', labelsize=cap_fs, pad=6)
+_align_polar_labels(ax2)
+fig2.tight_layout(pad=1.0, rect=[0.02, 0.02, 0.98, 0.84])
 
 with st.expander("Radar by Capability", expanded=True):
     _render_fig(fig2)

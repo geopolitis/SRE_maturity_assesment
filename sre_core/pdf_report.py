@@ -104,29 +104,50 @@ def generate_pdf(
     usable_w = pdf.w - 2 * margin
     pdf.image("ring_stage.png", x=margin, w=usable_w)
 
-    # -------- Page 2: Two radars on top, donuts bottom --------
+    # -------- Page 2: Two radars stacked (full width) --------
     pdf.add_page()
     # compute layout
     usable_w = pdf.w - 2 * margin
     usable_h = pdf.h - 2 * margin
-    gap = 5
-    half_w = (usable_w - gap) / 2.0
-    top_h = half_w  # assume square radars; height ~ width
-    bottom_y = margin + top_h + 12  # start of bottom area, extra gap
+    gap = 8
 
-    # stage radar (left)
-    pdf.image("radar_stage.png", x=margin, y=margin, w=half_w)
-    # capability radar (right)
-    pdf.image("radar_capability.png", x=margin + half_w + gap, y=margin, w=half_w)
+    # Helper: compute placed heights for a given width
+    def _img_height_at_width(path: str, width: float) -> float:
+        try:
+            from PIL import Image
+            w_px, h_px = Image.open(path).size
+            if w_px == 0:
+                return width  # degenerate fallback
+            return (h_px / w_px) * width
+        except Exception:
+            return width
 
-    # Donuts grid at bottom
+    # Choose a width that allows both radars to fit vertically
+    w_try = usable_w
+    h1 = _img_height_at_width("radar_stage.png", w_try)
+    h2 = _img_height_at_width("radar_capability.png", w_try)
+    total_h = h1 + h2 + gap
+    if total_h > usable_h:
+        scale = usable_h / total_h
+        w_try *= scale
+        h1 *= scale
+        h2 *= scale
+
+    x = margin + (usable_w - w_try) / 2.0  # centered
+    y = margin
+    pdf.image("radar_stage.png", x=x, y=y, w=w_try)
+    y += h1 + gap
+    pdf.image("radar_capability.png", x=x, y=y, w=w_try)
+
+    # -------- Page 3: Donuts grid --------
+    pdf.add_page()
     completion = _compute_stage_completion(maturity_items, responses)
     if completion:
         try:
             fig_clocks, _ = grid_from_completion(completion, cols=5 if len(completion) >= 7 else 3, show=False)
             clocks_img, _ = figure_to_image(fig_clocks)
             clocks_img.save("stage_clocks.png")
-            pdf.image("stage_clocks.png", x=margin, y=bottom_y, w=usable_w)
+            pdf.image("stage_clocks.png", x=margin, y=margin, w=usable_w)
         except Exception:
             pass
 
@@ -166,7 +187,7 @@ def generate_pdf(
                     pdf.cell(0, 6, txt=_safe(f"{cap}:"), ln=True)
                     pdf.set_font("Arial", size=10)
                     for lvl, stt, ds in lines:
-                        _wrap_multicell(pdf, f"    {lvl} - {stt}: {ds};", h=5)
+                        _wrap_multicell(pdf, f"    {lvl} - {stt}: {ds}", h=5)
                     pdf.ln(1)
             if stage_printed:
                 pdf.ln(1)
