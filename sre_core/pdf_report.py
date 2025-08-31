@@ -3,6 +3,7 @@ from typing import Dict, List
 from datetime import datetime
 from tempfile import NamedTemporaryFile
 from fpdf import FPDF
+import re
 
 from .constants import LEVELS
 from .plotting import figure_to_image
@@ -31,15 +32,20 @@ def _compute_stage_completion(maturity_items: List[dict], responses: Dict[str, D
         out[stage] = (done / total) if total else 0.0
     return out
 
+def _soft_break_long_tokens(text: str, limit: int = 50) -> str:
+    """Insert spaces into very long unbroken tokens to avoid FPDF width errors."""
+    def breaker(match: re.Match) -> str:
+        s = match.group(0)
+        return " ".join(s[i:i+limit] for i in range(0, len(s), limit))
+    # Break any sequence of non-space characters longer than `limit`
+    return re.sub(r"\S{%d,}" % limit, breaker, text)
+
 def _wrap_multicell(pdf: FPDF, txt: str, h: float = 5):
-    max_chars = 150
-    if len(txt) <= max_chars:
-        pdf.multi_cell(0, h, _safe(txt))
-        return
-    start = 0
-    while start < len(txt):
-        pdf.multi_cell(0, h, _safe(txt[start:start+max_chars]))
-        start += max_chars
+    # Normalize and defensively break very long tokens (e.g., URLs)
+    safe = _safe(txt or "")
+    safe = _soft_break_long_tokens(safe, limit=48)
+    # Let FPDF handle wrapping now that there are break points
+    pdf.multi_cell(0, h, safe)
 
 def generate_pdf(
     product: str,

@@ -43,7 +43,13 @@ plotting.plot_radar(ax1, stages if stages else ["N/A"], stage_vals if stage_vals
 ax1.set_title("Average score by Stage")
 if stages:
     ax1.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
-st.pyplot(fig1, use_container_width=True)
+def _render_fig(fig):
+    try:
+        st.pyplot(fig, width='stretch')
+    except TypeError:
+        st.pyplot(fig, use_container_width=True)
+
+_render_fig(fig1)
 
 # Radar by Capability
 caps = sorted(pdf_df["Capability"].unique().tolist())
@@ -56,7 +62,7 @@ plotting.plot_radar(ax2, caps if caps else ["N/A"], cap_vals if cap_vals else [0
 ax2.set_title("Average score by Capability")
 if caps:
     ax2.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
-st.pyplot(fig2, use_container_width=True)
+_render_fig(fig2)
 
 # Build + download (spinner in the sidebar bottom)
 with st.sidebar:

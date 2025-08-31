@@ -49,8 +49,14 @@ for prod in radar_stage["Product"].unique():
 ax1.set_title("Maturity by Stage")
 ax1.legend(bbox_to_anchor=(1.25, 1.1), loc="upper left", fontsize=9)
 
+def _render_fig(fig):
+    try:
+        st.pyplot(fig, width='stretch')
+    except TypeError:
+        st.pyplot(fig, use_container_width=True, clear_figure=True)
+
 with st.expander("Radar by Stage", expanded=True):
-    st.pyplot(fig1, use_container_width=True, clear_figure=True)
+    _render_fig(fig1)
 
 # ---------- Radar by Capability ----------
 radar_cap = df.groupby(["Product", "Capability"])["Score"].mean().reset_index()
@@ -70,7 +76,7 @@ ax2.set_title("Maturity by Capability")
 ax2.legend(bbox_to_anchor=(1.25, 1.1), loc="upper left", fontsize=9)
 
 with st.expander("Radar by Capability", expanded=True):
-    st.pyplot(fig2, use_container_width=True, clear_figure=True)
+    _render_fig(fig2)
 
 # ---------- Stage Completion Half-Donuts ----------
 st.markdown("### Stage Completion Overview")
@@ -87,7 +93,7 @@ else:
     )
     # Avoid double-render inside grid_from_completion by disabling auto-show
     fig_g, _axes = grid_from_completion(completion, cols=5, show=False)
-    st.pyplot(fig_g, use_container_width=True, clear_figure=True)
+    _render_fig(fig_g)
 
 # ---------- Circular “degree of implementation” chart ----------
 st.markdown("### Degree of Implementation (Maturity by Stage)")
@@ -135,4 +141,4 @@ if selected_product:
         figsize=(ring_size, ring_size),
     )
     with st.expander("Identification of the degree of the implementation (Maturity by Stage)", expanded=True):
-        st.pyplot(fig_ring, use_container_width=True, clear_figure=True)
+        _render_fig(fig_ring)

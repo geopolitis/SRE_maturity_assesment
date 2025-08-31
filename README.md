@@ -78,5 +78,26 @@ You can edit:
 ## Quick Run
 
 ```bash
-streamlit run Home.py
+# clone + run (one-off)
+bash scripts/clone_and_run.sh /opt/assessment-app/app 8502 127.0.0.1
+
+# or from a checked-out repo
+chmod +x scripts/*.sh
+./scripts/run_streamlit.sh
+```
+
+## Install as a Service
+
+```bash
+# clone + install systemd service (runs on 127.0.0.1:8502)
+sudo bash scripts/clone_and_install_service.sh /opt/assessment-app/app streamlit-assessment streamlit 8502
+
+# logs
+sudo journalctl -u streamlit-assessment -f --no-pager
+```
+
+If you see venv errors, ensure the OS package for venv is installed:
+
+```bash
+sudo apt-get update && sudo apt-get install -y python3-venv
 ```

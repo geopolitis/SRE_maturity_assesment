@@ -96,7 +96,10 @@ def grid_from_completion(
     if show:
         try:
             import streamlit as st
-            st.pyplot(fig, use_container_width=True, clear_figure=True)
+            try:
+                st.pyplot(fig, width='stretch')
+            except TypeError:
+                st.pyplot(fig, use_container_width=True, clear_figure=True)
         except Exception:
             pass
 
