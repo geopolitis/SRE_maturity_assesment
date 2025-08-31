@@ -1,20 +1,13 @@
-# sre_core/pdf_report.py
 from __future__ import annotations
-
-import os
+from typing import Dict, List
 from datetime import datetime
 from tempfile import NamedTemporaryFile
-from typing import Dict, List, Tuple
-
 from fpdf import FPDF
 
 from .constants import LEVELS
 from .plotting import figure_to_image
-from .gauges import stage_completion_from, make_semi_donut
-
-# Replace glyphs that FPDF can't render in Latin-1
+from .gauges import grid_from_completion, ring_maturity_by_stage  
 REPLACEMENTS = {"—": "-", "–": "-", "\u00A0": " "}
-
 def _safe(s: str) -> str:
     if not isinstance(s, str):
         s = str(s)
@@ -22,86 +15,31 @@ def _safe(s: str) -> str:
         s = s.replace(k, v)
     return s.encode("latin-1", "ignore").decode("latin-1")
 
+def _compute_stage_completion(maturity_items: List[dict], responses: Dict[str, Dict[str, str]]) -> Dict[str, float]:
+    by_stage = {}
+    for it in maturity_items:
+        by_stage.setdefault(it["Stage"], []).append(it)
+    out: Dict[str, float] = {}
+    for stage, caps in by_stage.items():
+        total = done = 0
+        for it in caps:
+            cap_res = responses.get(it["Capability"], {})
+            for lvl in LEVELS:
+                total += 1
+                if cap_res.get(lvl, "Not achieved") == "Completed":
+                    done += 1
+        out[stage] = (done / total) if total else 0.0
+    return out
 
-def _save_fig_as_png(fig) -> str:
-    """Save a Matplotlib Figure to a temp PNG; return path."""
-    pil_img, _ = figure_to_image(fig)
-    tmp = NamedTemporaryFile(delete=False, suffix=".png")
-    pil_img.save(tmp.name)
-    tmp.close()
-    return tmp.name
-
-
-def _render_stage_clocks(pdf: FPDF,
-                         maturity_items: List[dict],
-                         responses: Dict[str, Dict[str, str]]) -> None:
-    """
-    Render 'Stage Completion Overview' clocks under the radar diagrams.
-    Uses Plotly->PNG via kaleido. If kaleido is missing, we silently skip.
-    """
-    try:
-        completion = stage_completion_from(maturity_items, responses)
-        if not completion:
-            return
-
-        pdf.ln(6)
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 8, _safe("Stage Completion Overview"), ln=True)
-        pdf.set_font("Arial", size=9)
-        pdf.cell(
-            0, 6,
-            _safe("% Completed across all capabilities and levels in the stage."),
-            ln=True,
-        )
-        pdf.ln(2)
-
-        # Layout grid
-        col_w = 45     # horizontal step between clocks
-        img_w = 28     # clock image width
-        left = 18      # left margin start
-        cols = 4
-
-        x = left
-        row_y = pdf.get_y()
-        used_tmp: List[str] = []
-
-        for i, (stage, pct) in enumerate(completion.items()):
-            # Create gauge and export to PNG (requires kaleido)
-            fig = make_semi_donut(stage, pct)
-            png = NamedTemporaryFile(delete=False, suffix=".png")
-            png.write(fig.to_image(format="png", width=240, height=240, scale=2))
-            png.flush(); png.close()
-            used_tmp.append(png.name)
-
-            # Place image
-            pdf.image(png.name, x=x, y=row_y, w=img_w)
-            # Caption under each donut
-            pdf.set_xy(x, row_y + img_w + 2)
-            pdf.set_font("Arial", size=9)
-            pdf.cell(img_w, 5, _safe(stage), align="C")
-
-            # Move to next column / row
-            if (i + 1) % cols == 0:
-                row_y += img_w + 12
-                x = left
-                pdf.set_xy(x, row_y)
-            else:
-                x += col_w
-                pdf.set_xy(x, row_y)
-
-        # Cleanup temp images
-        for p in used_tmp:
-            try:
-                os.remove(p)
-            except Exception:
-                pass
-
-        pdf.ln(8)
-
-    except Exception:
-        # If kaleido is not available or anything fails, skip gauges gracefully
-        pdf.ln(2)
-
+def _wrap_multicell(pdf: FPDF, txt: str, h: float = 5):
+    max_chars = 150
+    if len(txt) <= max_chars:
+        pdf.multi_cell(0, h, _safe(txt))
+        return
+    start = 0
+    while start < len(txt):
+        pdf.multi_cell(0, h, _safe(txt[start:start+max_chars]))
+        start += max_chars
 
 def generate_pdf(
     product: str,
@@ -110,65 +48,118 @@ def generate_pdf(
     fig_stage,
     fig_cap,
 ):
-    """
-    Build the PDF exactly as before, but with the Stage Completion clocks
-    inserted just under the radar diagrams. Everything else stays intact.
-    Returns a NamedTemporaryFile handle.
-    """
-    # Save radar images from Matplotlib figures (temp files; /tmp is writable)
-    stage_png = _save_fig_as_png(fig_stage)
-    cap_png = _save_fig_as_png(fig_cap)
+    img_stage, _ = figure_to_image(fig_stage); img_stage.save("radar_stage.png")
+    img_cap, _   = figure_to_image(fig_cap);   img_cap.save("radar_capability.png")
 
-    # Build description lookup for prose sections
     desc_map = {
-        (i["Stage"], i["Capability"]): {lvl: i[lvl] for lvl in LEVELS}
+        (i["Stage"], i["Capability"]): {lvl: i.get(lvl, "") for lvl in LEVELS}
         for i in maturity_items
     }
 
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
+    margin = 15
+    pdf.set_auto_page_break(auto=False, margin=margin)
 
-    # --- Header (keep original format) ---
+    # -------- Page 1: Degree of Implementation (Ring) --------
+    pdf.add_page()
     pdf.set_font("Arial", size=14, style="B")
     pdf.cell(0, 10, txt=_safe(f"SRE Maturity Report for: {product}"), ln=True, align="C")
     pdf.set_font("Arial", size=10)
-    pdf.cell(0, 8, txt=_safe(f"Generated: {datetime.utcnow():%Y-%m-%d %H:%M} UTC"), ln=True, align="C")
-    pdf.ln(5)
+    pdf.cell(0, 8, txt=_safe(f"Generated: {datetime.now():%Y-%m-%d %H:%M}"), ln=True, align="C")
+    pdf.ln(3)
 
-    # --- Diagrams first (keep same placement logic) ---
-    pdf.image(stage_png, x=15, w=180)
-    pdf.ln(5)
-    pdf.image(cap_png, x=15, w=180)
+    # Build tri-state status for ring
+    by_stage = {}
+    for it in maturity_items:
+        by_stage.setdefault(it["Stage"], []).append(it)
+    status_map = {}
+    for stage, caps in by_stage.items():
+        for lvl in LEVELS:
+            total = 0
+            completed = 0
+            partial = 0
+            for it in caps:
+                cap_res = (responses or {}).get(it["Capability"], {}) or {}
+                stt = cap_res.get(lvl, "Not achieved")
+                total += 1
+                if stt == "Completed":
+                    completed += 1
+                elif stt == "Partially achieved":
+                    partial += 1
+            if total and completed == total:
+                status_map[(stage, lvl)] = "completed"
+            elif (completed > 0) or (partial > 0):
+                status_map[(stage, lvl)] = "partial"
+            else:
+                status_map[(stage, lvl)] = "not"
 
-    # --- NEW: Stage Completion Overview (under the radars) ---
-    _render_stage_clocks(pdf, maturity_items, responses)
+    # Create ring figure and embed
+    stages_order = sorted(by_stage.keys())
+    label_overrides = {"Develop": 190, "Observe": 190, "Secure": 190, "Test": 190, "tests": 190, "Tests": 190}
+    fig_ring = ring_maturity_by_stage(
+        stages=stages_order,
+        levels=LEVELS,
+        status_map=status_map,
+        label_rotation_overrides=label_overrides,
+        figsize=(9, 9),
+    )
+    ring_img, _ = figure_to_image(fig_ring)
+    ring_img.save("ring_stage.png")
+    usable_w = pdf.w - 2 * margin
+    pdf.image("ring_stage.png", x=margin, w=usable_w)
 
-    # Continue exactly as before
+    # -------- Page 2: Two radars on top, donuts bottom --------
+    pdf.add_page()
+    # compute layout
+    usable_w = pdf.w - 2 * margin
+    usable_h = pdf.h - 2 * margin
+    gap = 5
+    half_w = (usable_w - gap) / 2.0
+    top_h = half_w  # assume square radars; height ~ width
+    bottom_y = margin + top_h + 6  # start of bottom area
+
+    # stage radar (left)
+    pdf.image("radar_stage.png", x=margin, y=margin, w=half_w)
+    # capability radar (right)
+    pdf.image("radar_capability.png", x=margin + half_w + gap, y=margin, w=half_w)
+
+    # Donuts grid at bottom
+    completion = _compute_stage_completion(maturity_items, responses)
+    if completion:
+        try:
+            fig_clocks, _ = grid_from_completion(completion, cols=5 if len(completion) >= 7 else 3, show=False)
+            clocks_img, _ = figure_to_image(fig_clocks)
+            clocks_img.save("stage_clocks.png")
+            pdf.image("stage_clocks.png", x=margin, y=bottom_y, w=usable_w)
+        except Exception:
+            pass
+
+    # -------- Textual sections (restored content) --------
+    # Enable auto page breaks for narrative content
+    pdf.set_auto_page_break(auto=True, margin=margin)
     pdf.add_page()
 
-    # Group by Stage/Capability from maturity_items (source of truth)
     from collections import OrderedDict
     stages = OrderedDict()
     for i in maturity_items:
         stages.setdefault(i["Stage"], set()).add(i["Capability"])
 
-    def section(title: str, keep: List[str]) -> None:
+    def section(title, keep_statuses):
         pdf.set_font("Arial", size=12, style="B")
         pdf.cell(0, 8, txt=_safe(title), ln=True)
         pdf.ln(2)
-
         any_rows = False
+
         for stage, caps in stages.items():
             stage_printed = False
             for cap in sorted(caps):
                 cap_resp = responses.get(cap, {})
-                lines: List[Tuple[str, str, str]] = []
+                lines = []
                 for lvl in LEVELS:
-                    status = cap_resp.get(lvl, "Not achieved")
-                    if status in keep:
-                        desc = desc_map.get((stage, cap), {}).get(lvl, "")
-                        lines.append((lvl, status, desc))
+                    stt = cap_resp.get(lvl, "Not achieved")
+                    if stt in keep_statuses:
+                        ds = desc_map.get((stage, cap), {}).get(lvl, "")
+                        lines.append((lvl, stt, ds))
                 if lines:
                     any_rows = True
                     if not stage_printed:
@@ -179,8 +170,7 @@ def generate_pdf(
                     pdf.cell(0, 6, txt=_safe(f"{cap}:"), ln=True)
                     pdf.set_font("Arial", size=10)
                     for lvl, stt, ds in lines:
-                        # width=0 expands to page width; _safe avoids long glyph issues
-                        pdf.multi_cell(0, 5, _safe(f"    {lvl} - {stt}: {ds};"))
+                        _wrap_multicell(pdf, f"    {lvl} - {stt}: {ds};", h=5)
                     pdf.ln(1)
             if stage_printed:
                 pdf.ln(1)
@@ -188,22 +178,13 @@ def generate_pdf(
         if not any_rows:
             pdf.set_font("Arial", size=10)
             pdf.cell(0, 6, txt="(none)", ln=True)
-
         pdf.ln(2)
 
     section("Completed", ["Completed"])
     section("Partially Achieved", ["Partially achieved"])
     section("Not Achieved", ["Not achieved"])
 
-    # Write PDF and cleanup temp radar images
     tmp = NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf.output(tmp.name)
     tmp.seek(0)
-
-    for p in (stage_png, cap_png):
-        try:
-            os.remove(p)
-        except Exception:
-            pass
-
     return tmp
