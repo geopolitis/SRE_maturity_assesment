@@ -41,11 +41,20 @@ def _soft_break_long_tokens(text: str, limit: int = 50) -> str:
     return re.sub(r"\S{%d,}" % limit, breaker, text)
 
 def _wrap_multicell(pdf: FPDF, txt: str, h: float = 5):
-    # Normalize and defensively break very long tokens (e.g., URLs)
+    """Write wrapped text using the full effective page width.
+
+    Avoids FPDFException when current X is near the right margin by
+    always resetting X and passing an explicit width (epw).
+    Also inserts soft breaks for long tokens.
+    """
     safe = _safe(txt or "")
     safe = _soft_break_long_tokens(safe, limit=48)
-    # Let FPDF handle wrapping now that there are break points
-    pdf.multi_cell(0, h, safe)
+    try:
+        w = pdf.epw  # effective page width (fpdf2)
+    except Exception:
+        w = pdf.w - pdf.l_margin - pdf.r_margin
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(w, h, safe)
 
 def generate_pdf(
     product: str,
