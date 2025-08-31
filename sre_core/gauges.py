@@ -33,6 +33,43 @@ def stage_completion_from(
         out[stage] = (done / total) if total else 0.0
     return out
 
+def build_status_map(
+    maturity_items: List[dict],
+    responses_product: Dict[str, Dict[str, str]],
+    levels: List[str],
+) -> Dict[Tuple[str, str], str]:
+    """Compute tri-state per (stage, level): 'not' | 'partial' | 'completed'.
+
+    - completed: all capabilities at that level are "Completed"
+    - partial: any capability is "Completed" OR "Partially achieved" (but not all Completed)
+    - not: none of the capabilities at that level are completed/partial
+    """
+    by_stage: Dict[str, List[dict]] = {}
+    for it in maturity_items or []:
+        by_stage.setdefault(it["Stage"], []).append(it)
+
+    status_map: Dict[Tuple[str, str], str] = {}
+    for stage, caps in by_stage.items():
+        for lvl in levels:
+            total = 0
+            completed = 0
+            partial = 0
+            for it in caps:
+                cap_res = (responses_product or {}).get(it["Capability"], {}) or {}
+                stt = cap_res.get(lvl, "Not achieved")
+                total += 1
+                if stt == "Completed":
+                    completed += 1
+                elif stt == "Partially achieved":
+                    partial += 1
+            if total and completed == total:
+                status_map[(stage, lvl)] = "completed"
+            elif (completed > 0) or (partial > 0):
+                status_map[(stage, lvl)] = "partial"
+            else:
+                status_map[(stage, lvl)] = "not"
+    return status_map
+
 # ---------- Donut (unchanged/simple) ----------
 
 def _half_donut(ax, pct: float, r: float = 1.0, width: float = 0.28) -> None:

@@ -101,3 +101,20 @@ If you see venv errors, ensure the OS package for venv is installed:
 ```bash
 sudo apt-get update && sudo apt-get install -y python3-venv
 ```
+
+## Testing
+
+Run unit tests for the core (no browser needed):
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+pytest -q
+```
+
+What tests cover:
+- Scoring dataframe construction
+- Half-donut grid rendering (no Streamlit display)
+- Ring chart figure creation
+- Figure → image conversion
+- PDF generation with diagrams and wrapped text

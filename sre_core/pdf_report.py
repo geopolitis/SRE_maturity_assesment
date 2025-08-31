@@ -7,7 +7,7 @@ import re
 
 from .constants import LEVELS
 from .plotting import figure_to_image
-from .gauges import grid_from_completion, ring_maturity_by_stage  
+from .gauges import grid_from_completion, ring_maturity_by_stage, build_status_map  
 REPLACEMENTS = {"—": "-", "–": "-", "\u00A0": " "}
 def _safe(s: str) -> str:
     if not isinstance(s, str):
@@ -84,31 +84,12 @@ def generate_pdf(
     pdf.ln(3)
 
     # Build tri-state status for ring
+    status_map = build_status_map(maturity_items, responses, LEVELS)
+
+    # Create ring figure and embed
     by_stage = {}
     for it in maturity_items:
         by_stage.setdefault(it["Stage"], []).append(it)
-    status_map = {}
-    for stage, caps in by_stage.items():
-        for lvl in LEVELS:
-            total = 0
-            completed = 0
-            partial = 0
-            for it in caps:
-                cap_res = (responses or {}).get(it["Capability"], {}) or {}
-                stt = cap_res.get(lvl, "Not achieved")
-                total += 1
-                if stt == "Completed":
-                    completed += 1
-                elif stt == "Partially achieved":
-                    partial += 1
-            if total and completed == total:
-                status_map[(stage, lvl)] = "completed"
-            elif (completed > 0) or (partial > 0):
-                status_map[(stage, lvl)] = "partial"
-            else:
-                status_map[(stage, lvl)] = "not"
-
-    # Create ring figure and embed
     stages_order = sorted(by_stage.keys())
     label_overrides = {"Develop": 190, "Observe": 190, "Secure": 190, "Test": 190, "tests": 190, "Tests": 190}
     fig_ring = ring_maturity_by_stage(
